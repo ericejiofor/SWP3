@@ -1,20 +1,29 @@
+/**
+ * Project 8
+ * @author eejiofor
+ * @author rober230
+ */
+
 import edu.purdue.cs.cs180.channel.*;
 import java.util.*;
 
 public class Server implements MessageListener {
     private Channel channel;
     private String algorithm;
-    private int interval;
+    private int sleepTime;
     private final Queue<Volunteer> volunteers = new ArrayDeque<Volunteer>();
     private final Queue<Request> requests = new ArrayDeque<Request>();
 
-    public Server(Channel channel, String algorithm) {
+    public Server(Channel channel, int sleepTime) {
         this.channel = channel;
-        this.algorithm = algorithm;
+        this.sleepTime = sleepTime;
         channel.setMessageListener(this);
         System.out.printf("Matching Algorithm: %s\n", algorithm);
     }
-
+    public int getNumberVolunteers() {
+    	return 0;
+    }
+    
     class Volunteer {
         final int id;
         final String location;
@@ -23,6 +32,10 @@ public class Server implements MessageListener {
             this.id = id;
             this.location = location;
         }
+    }
+    
+    public int getNumberRequesters() {
+		return 0;	
     }
 
     class Request {
@@ -36,6 +49,8 @@ public class Server implements MessageListener {
             this.urgency = urgency;
         }
     }
+    
+    
 
     @Override
     public void messageReceived(String message, int id) {
@@ -49,14 +64,15 @@ public class Server implements MessageListener {
         else
             System.err.printf("IGNORING INVALID REQUEST: %s\n", message);
 
-        if (!(requests.isEmpty() || volunteers.isEmpty())) {
+        /*if (!(requests.isEmpty() || volunteers.isEmpty())) {
             if (algorithm.equals("FCFS"))
                 matchFCFS();
             else if (algorithm.equals("CLOSEST"))
                 matchClosest();
             else if (algorithm.equals("URGENCY"))
                 matchUrgency();
-        }
+        }*/
+        
     }
 
     private void matchFCFS() {
@@ -149,17 +165,23 @@ public class Server implements MessageListener {
         }
     }
 
-    public static void main(String[] args, int inter) {
+    public static void main(String[] args, int sleepTime) {
         Channel channel = new TCPChannel(Integer.parseInt(args[0]));
-        new Server(channel, args[1]);
+        new Server(channel, sleepTime);
     }
     
     public void run()
     {
     	 try {
-             Thread.sleep(interval);
+             Thread.sleep(sleepTime);
          } catch (InterruptedException e) {
              e.printStackTrace();
          }
     }
+    
 }
+/*Object lock = new Object();
+synchronized (lock) {
+// update and/or access the requester and volunteer
+// data structures
+}*/
