@@ -20,9 +20,6 @@ public class Server implements MessageListener {
 		channel.setMessageListener(this);
 		System.out.printf("Matching Algorithm: %s\n", algorithm);
 	}
-	public int getNumberVolunteers() {
-		return 0;
-	}
 
 	class Volunteer {
 		final int id;
@@ -34,8 +31,8 @@ public class Server implements MessageListener {
 		}
 	}
 
-	public int getNumberRequesters() {
-		return 0;	
+	public int getNumberVolunteers() {
+		return volunteers.size();
 	}
 
 	class Request {
@@ -50,7 +47,9 @@ public class Server implements MessageListener {
 		}
 	}
 
-
+	public int getNumberRequesters() {
+		return requests.size();	
+	}
 
 	@Override
 	public void messageReceived(String message, int id) {
@@ -168,9 +167,7 @@ public class Server implements MessageListener {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-
 	}
-
 }
 /*Object lock = new Object();
 synchronized (lock) {
