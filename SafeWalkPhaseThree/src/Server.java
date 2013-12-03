@@ -4,6 +4,7 @@ import java.util.*;
 public class Server implements MessageListener {
     private Channel channel;
     private String algorithm;
+    private int interval;
     private final Queue<Volunteer> volunteers = new ArrayDeque<Volunteer>();
     private final Queue<Request> requests = new ArrayDeque<Request>();
 
@@ -148,8 +149,17 @@ public class Server implements MessageListener {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args, int inter) {
         Channel channel = new TCPChannel(Integer.parseInt(args[0]));
         new Server(channel, args[1]);
+    }
+    
+    public void run()
+    {
+    	 try {
+             Thread.sleep(interval);
+         } catch (InterruptedException e) {
+             e.printStackTrace();
+         }
     }
 }
