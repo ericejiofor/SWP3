@@ -9,16 +9,17 @@ import java.util.*;
 
 public class Server implements MessageListener {
 	private Channel channel;
-	private String algorithm;
 	private int sleepTime;
 	private final Queue<Volunteer> volunteers = new ArrayDeque<Volunteer>();
 	private final Queue<Request> requests = new ArrayDeque<Request>();
-
+	Object lock = new Object();
+	private final int[][] times = {{0, 8, 6, 5, 4}, {8, 0, 4, 2, 5}, {6, 4, 0, 3, 1}, 
+							{5, 2, 3, 0, 7}, {4, 5, 1, 7, 0}};
+							
 	public Server(Channel channel, int sleepTime) {
 		this.channel = channel;
 		this.sleepTime = sleepTime;
 		channel.setMessageListener(this);
-		System.out.printf("Matching Algorithm: %s\n", algorithm);
 	}
 
 	class Volunteer {
@@ -50,104 +51,71 @@ public class Server implements MessageListener {
 	public int getNumberRequesters() {
 		return requests.size();	
 	}
-
+	
+	public int getTime(String loc) {
+		int coord = 0;
+		if (loc.equals("CL50"))
+			coord = 0;
+		if (loc.equals("EE"))
+			coord = 1;
+		if (loc.equals("LWSN"))
+			coord = 2;
+		if (loc.equals("PMU"))
+			coord = 3;
+		if (loc.equals("PUSH"))
+			coord = 4;
+		return coord;		
+	}
+	
+	public void closest() {
+	
+		if (volunteers.size() > 1 && requests.size() == 1) {
+			
+			sendMessage(volunteer, request);
+		}
+		else if (requests.size() > 1 && volunteers.size() == 1) {
+			Volunteer volunteer = volunteers.remove(0);
+			int temp = 10;
+			int index = 0;
+			for (int i = 0; i < requests.size(); i++)
+			{
+				Request request = requests.get(i);
+				int curTime = times[getTime(volunteer.location)][getTime(request.location)];
+				if (curTime < temp)
+				{
+					temp = curTime;
+					index = i;
+				}			
+			}
+			Request request = requests.remove(index);
+			sendMessage(volunteer, request);
+		}
+		else if (requests.size() == 1 && volunteers.size() == 1) {
+			Request request = requests.remove(0);
+			Volunteer volunteer = volunteers.remove(0);
+			sendMessage(volunteer, request);
+		}
+	
+	} 
+	
+	
 	@Override
 	public void messageReceived(String message, int id) {
-		System.out.printf("Received from %d: %s\n", id, message);
-
-		String[] m = message.split(" ");
-		if (m[0].equals("REQUEST")) // REQUEST location urgency
-			requests.add(new Request(id, m[1], m[2]));
-		else if (m[0].equals("VOLUNTEER")) // VOLUNTEER location
-			volunteers.add(new Volunteer(id, m[1]));
-		else
-			System.err.printf("IGNORING INVALID REQUEST: %s\n", message);
-	}
-
-	private void matchFCFS() {
-		Volunteer volunteer = volunteers.remove();
-		Request requester = requests.remove();
-		sendMessages(volunteer, requester);
-	}
-
-	private int getDistance(String location1, String location2) {
-		final String[] buildings = { "CL50", "EE", "LWSN", "PMU", "PUSH" };
-		final int[][] distances = { { 0, 8, 6, 5, 4 }, { 8, 0, 4, 2, 5 }, { 6, 4, 0, 3, 1 }, { 5, 2, 3, 0, 7 },
-				{ 4, 5, 1, 7, 0 } };
-		int i1 = findBuilding(buildings, location1);
-		int i2 = findBuilding(buildings, location2);
-		return distances[i1][i2];
-	}
-
-	private int findBuilding(String[] buildings, String location) {
-		for (int i = 0; i < buildings.length; i++)
-			if (buildings[i].equals(location))
-				return i;
-		System.err.println("UNKNOWN BUILDING: " + location);
-		return -1;
-	}
-
-	private void matchClosest() {
-		Volunteer volunteer = null;
-		Request requester = null;
-		if (requests.size() == 1) {
-			requester = requests.remove();
-			int distance = Integer.MAX_VALUE;
-			for (Volunteer v : volunteers) {
-				int d = getDistance(requester.location, v.location);
-				if (d < distance) {
-					distance = d;
-					volunteer = v;
-				}
-			}
-			volunteers.remove(volunteer);
-		} else if (volunteers.size() == 1) {
-			volunteer = volunteers.remove();
-			int distance = Integer.MAX_VALUE;
-			for (Request r : requests) {
-				int d = getDistance(r.location, volunteer.location);
-				if (d < distance) {
-					distance = d;
-					requester = r;
-				}
-			}
-			requests.remove(requester);
-		} else {
-			System.err.println("bad");
-		}
-
-		if (volunteer != null && requester != null) {
-			sendMessages(volunteer, requester);
+		sychronized (lock) {
+			String[] m = message.split(" ");
+			if (m[0].equals("REQUEST")) // REQUEST location urgency
+				requests.add(new Request(id, m[1], m[2]));
+			else if (m[0].equals("VOLUNTEER")) // VOLUNTEER location
+				volunteers.add(new Volunteer(id, m[1]));
+			else
+				System.err.printf("IGNORING INVALID REQUEST: %s\n", message);
 		}
 	}
 
-	private void matchUrgency() {
-		Volunteer volunteer = volunteers.remove();
-		if (failedUrgency(volunteer, "EMERGENCY") && failedUrgency(volunteer, "URGENT")
-				&& failedUrgency(volunteer, "NORMAL"))
-			System.err.println("FAILED TO HANDLE URGENCY REQUEST");
-	}
-
-
-	private boolean failedUrgency(Volunteer volunteer, String urgency) {
-		for (Request requester : requests)
-			if (requester.urgency.equals(urgency)) {
-				requests.remove(requester);
-				sendMessages(volunteer, requester);
-				return false;
-			}
-		return true;
-	}
-
-	private void sendMessages(Volunteer volunteer, Request requester) {
+	public void sendMessage(Volunteer v, Request r) {
 		try {
-			String rMessage = "VOLUNTEER " + volunteer.id + " " + getDistance(volunteer.location, requester.location);
-			String vMessage = "LOCATION " + requester.location + " " + requester.urgency;
-			System.out.printf("Sending:\n");
-			System.out.printf("    to volunteer %d: %s\n", volunteer.id, vMessage);
-			System.out.printf("    to requester %d: %s\n", requester.id, rMessage);
-			channel.sendMessage(vMessage, volunteer.id);
-			channel.sendMessage(rMessage, requester.id);
+			channel.sendMessage("LOCATION " + r.location + " " + r.urgency, v.id);
+			channel.sendMessage("VOLUNTEER " + v.id + " " + times[getTime(v.location)][getTime(r.location)], r.id);
 		} catch (ChannelException e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -160,27 +128,61 @@ public class Server implements MessageListener {
 		server.run();
 	}
 
-	public void run()
-	{
-		try {
-			Thread.sleep(sleepTime);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
+	public void run() {
+		while(true) {
+			try {
+				Thread.sleep(sleepTime);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			synchronized (lock) {
+			Resquest req;
+			Volunteer vol;
+				while (!(requests.isEmpty() || volunteers.isEmpty())) {
+					ArrayList<Request> emergency = new ArrayList<Request>();
+					ArrayList<Request> urgent = new ArrayList<Request>();
+					ArrayList<Request> normal = new ArrayList<Request>();
+					
+					for (int x = 0; x < requests.size(); x++) {
+						if (requests.get(x).urgency.equals("EMERGENCY")) 
+							emergency.add(requests.get(x));
+						else if (requests.get(x).urgency.equals("URGENT"))
+							urgent.add(requests.get(x));
+						else if (requests.get(x).urgency.equals("NORMAL"))
+							normal.add(requests.get(x));
+					}
+					if (emergency.isEmpty() == false)
+					{
+						req = requests.remove(emergency.get(0));
+					}
+					else if (urgent.isEmpty() == false)
+					{
+						req = requests.remove(urgent.get(0));
+					}
+					else if (normal.isEmpty() == false)
+					{
+						req = requests.remove(normal.get(0));
+					}
+					int temp = 10;
+					int index = 0;
+					for (int i = 0; i < volunteers.size(); i++)
+					{
+						Volunteer temp = volunteers.get(i);
+						int curTime = times[getTime(volunteer.location)][getTime(request.location)];
+						if (curTime < temp)
+						{
+							temp = curTime;
+							index = i;
+						}			
+					}
+					vol = volunteers.remove(index);
+					sendMessage(vol, req);
+				}
+			}
+		]
 	}
 }
-/*Object lock = new Object();
-synchronized (lock) {
-	// update and/or access the requester and volunteer
-	// data structures
-}
 
-if (!(requests.isEmpty() || volunteers.isEmpty())) {
-	if (algorithm.equals("FCFS"))
-		matchFCFS();
-	else if (algorithm.equals("CLOSEST"))
-		matchClosest();
-	else if (algorithm.equals("URGENCY"))
-		matchUrgency();
-}*/
+
+
 
